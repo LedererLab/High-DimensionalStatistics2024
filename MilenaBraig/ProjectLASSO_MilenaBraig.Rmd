@@ -1,0 +1,67 @@
+---
+title: "Project_LASSO-Implementation"
+output: html_notebook
+---
+
+1. Implementing the Coordinate Decent
+```{r}
+SoftThresholding<-function(z,lambda){
+  if (z>lambda){
+    return(z-lambda)
+  }
+  if (z<(-lambda)){
+    return(z+lambda)
+  } 
+  return(0)
+}
+#Test
+x=-10:10
+y=rep(0,length(x))
+for(i in 1:length(x)){
+  y[i]=SoftThresholding(x[i],3)
+}
+plot(x,y)
+```
+####TESTE SOFT THRESHOLD DURCH PLOT ######
+
+
+```{r}
+CoordinateDecent<-function(design, outcome, tuningparameter, nbrcycles, startingpoint=NULL){
+  #generating a random starting point for the estimator if no starting point is given
+  if (is.null(startingpoint)){
+    estimator<-matrix(rnorm(dim(design)[2],0,1),nrow=dim(design)[2],ncol=1)
+  }
+  else {
+    estimator<-matrix(startingpoint,nrow=dim(design)[2],ncol=1)
+  }
+  #Computing fixed arguments:
+  a=rep(NULL,dim(design)[2])
+  b=rep(NULL,dim(design)[2])
+  C=matrix(rep(0,dim(design)[2]*(dim(design)[2]-1)),nrow=dim(design)[2],ncol=(dim(design)[2]-1))
+  d=rep(NULL,dim(design)[2])
+  for (i in 1:dim(design)[2]){
+    a[i]=t(design[,i])%*%design[,i]   #squared l2-norms od the predictors (columns of the design)
+    b[i]=t(design[,i])%*%outcome      
+    C[i,]=t(design[,i])%*%design[,-i]
+    d[i]=tuningparameter/a[i]
+  }
+  for (k in 1:nbrcycles){
+    for (i in 1:dim(design)[2]){
+      estimator[i]=SoftThresholding((b[i]-C[i,]%*%estimator[-i])/a[i], d[i])
+    }
+  }
+  return(estimator)
+}
+```
+
+Test coordinate decent with data from Lab 4
+```{r}
+set.seed(1)
+n <- 100; p <- 500
+design <- matrix(rnorm(n*p,mean=0,sd=1),nrow=100,ncol=500)
+regression.vector <- c(1,1,1,rep(0,p-3))
+outcome <- design%*%regression.vector#+rnorm(n,mean=0,sd=1) 
+
+CoordinateDecent(design, outcome, tuningparameter = 0.225, nbrcycles=30, startingpoint=rep(0,dim(design)[2]))
+```
+->lambda ~~0.225

@@ -22,11 +22,10 @@ for(i in 1:length(x)){
 }
 plot(x,y)
 ```
-####TESTE SOFT THRESHOLD DURCH PLOT ######
 
 
 ```{r}
-CoordinateDecent<-function(design, outcome, tuningparameter, nbrcycles, startingpoint=NULL){
+LassoCoordinateDecent<-function(design, outcome, tuningparameter, nbrcycles, startingpoint=NULL){
   #generating a random starting point for the estimator if no starting point is given
   if (is.null(startingpoint)){
     estimator<-matrix(rnorm(dim(design)[2],0,1),nrow=dim(design)[2],ncol=1)
@@ -46,22 +45,153 @@ CoordinateDecent<-function(design, outcome, tuningparameter, nbrcycles, starting
     d[i]=tuningparameter/a[i]
   }
   for (k in 1:nbrcycles){
+    index=sample(1:dim(design)[2])
     for (i in 1:dim(design)[2]){
-      estimator[i]=SoftThresholding((b[i]-C[i,]%*%estimator[-i])/a[i], d[i])
+      estimator[index[i]]=SoftThresholding((b[index[i]]-C[index[i],]%*%estimator[-index[i]])/a[index[i]],
+                                           d[index[i]])
     }
   }
   return(estimator)
 }
 ```
 
-Test coordinate decent with data from Lab 4
+2. Testing coordinate decent with data from Lab 4
 ```{r}
 set.seed(1)
 n <- 100; p <- 500
 design <- matrix(rnorm(n*p,mean=0,sd=1),nrow=100,ncol=500)
 regression.vector <- c(1,1,1,rep(0,p-3))
-outcome <- design%*%regression.vector#+rnorm(n,mean=0,sd=1) 
+outcome <- design%*%regression.vector+rnorm(n,mean=0,sd=0.01) 
 
-CoordinateDecent(design, outcome, tuningparameter = 0.225, nbrcycles=30, startingpoint=rep(0,dim(design)[2]))
+#LassoCoordinateDecent(design, outcome, tuningparameter = 0.225, nbrcycles=100,
+#                      startingpoint=rep(0,dim(design)[2]))
 ```
-->lambda ~~0.225
+3. Testing the Lasso-Implementation on Real Data
+
+3.1 Importing and Scaling a Real Data Set
+```{r}
+data.original=read.csv("/Users/milena/HDStatistics_Project/High-DimensionalStatistics2024/MilenaBraig/communities_data.csv", header=FALSE, sep=",")
+data=data.original[,6:128]  #deleting non-predictive features
+n=dim(data)[1]    #saving dimensions
+p=dim(data)[2]
+data=as.numeric(as.matrix(data, nrow=n,ncol=p))   #converting to numeric values
+data=matrix(data,nrow=n,ncol=p)                   #converting the vector from as.numeric back to a matrix
+data=na.omit(data)
+#scaling
+#data=scale(data/sqrt(dim(data)[1]-1)*sqrt(dim(data)[1]))
+design=data[,-dim(data)[2]]
+outcome=data[,dim(data)[2]]
+```
+??? KANN ICH LemasGangUnitDeploy BENUTZEN??? -> ordinal data
+
+
+3.2 Divinding the Data into Data for Cross Validation, Training, and Testing
+```{r}
+size.training=100
+size.testing=100
+size.cv=100
+#training data
+indexes.training <- sample(c(1:dim(data)[1]), size.training)
+data.train=data[indexes.training,]
+#testing data
+data.rest=data[-indexes.training,]
+indexes.testing=sample(c(1:dim(data.rest)[1]), size.testing)
+data.test=data.rest[indexes.testing,]
+design.test=data.test[,-dim(data)[2]]
+outcome.test=data.test[,dim(data)[2]]
+#data for cross-validation
+data.rest=data.rest[-indexes.testing,]
+indexes.cv=sample(c(1:dim(data.rest)[1]), size.cv)
+data.cv=data.rest[indexes.cv,]
+design.cv=data.cv[,-dim(data)[2]]
+outcome.cv=data.cv[,dim(data)[2]]
+```
+
+3.3 Centering and Scaling
+```{r}
+mean=colMeans(data.train)
+data.train.centered=data.train-mean ###Überprüfen ob r das richtig macht
+sd=apply(data.train.centered,MARGIN=2,FUN=sd)
+#scaling
+data.train.scaled=data.train.centered/sd###Überprüfen ob r das richtig macht
+data.test.scaled=(data.test-mean)/sd
+data.cv.scaled=(data.cv-mean)/sd
+#dividing training data
+design.train=data.train.scaled[,-dim(data)[2]]
+outcome.train=data.train.scaled[,dim(data)[2]]
+#dividing testing data
+design.test=data.test.scaled[,-dim(data)[2]]
+outcome.test=data.test.scaled[,dim(data)[2]]
+#dividing data for cross validation
+design.cv=data.cv.scaled[,-dim(data)[2]]
+outcome.cv=data.cv.scaled[,dim(data)[2]]
+```
+
+
+3.4 K-Fold Cross-Validation
+```{r}
+l2norm<-function(x){
+  return(sqrt(sum(x^2)))
+}
+
+set.seed(10)
+KCrossValidation <- function(design, outcome, tuning.parameters, nbrfolds){
+  #splitting the data into k folds
+  size.fold=floor(dim(design)[1]/nbrfolds)
+  Folds=matrix(rep(0,nbrfolds*size.fold), nrow=nbrfolds, ncol=size.fold)
+  indexes=sample(1:dim(design)[1],dim(design)[1])  
+  for(i in 1:nbrfolds){
+    Folds[i,]=indexes[((i-1)*size.fold)+1:size.fold]
+  }
+  #cross-validating 
+  min.avg.error=Inf
+  best.tuningparameter=NULL
+  for(j in 1:length(tuning.parameters)){ #for each tuning parameter
+    error=rep(NULL,nbrfolds)
+    for(k in 1:nbrfolds){ #for each data separation
+    #training the model 
+    estimator=LassoCoordinateDecent(design[-Folds[k,],], outcome[-Folds[k,]], tuning.parameters[j],
+                                    nbrcycles=100, startingpoint = rep(0,dim(design)[2]) )
+    #testing the model
+    error[k]=l2norm(outcome[Folds[k,]]-design[Folds[k,],]%*%estimator)
+    }
+    #average error
+    avg.error=(sum(error)/nbrfolds)
+    #storing the minimal error and the according tuning parameter
+    if (avg.error<min.avg.error){
+      min.avg.error=avg.error
+      best.tuningparameter=tuning.parameters[j]
+      }
+  }
+  return(best.tuningparameter)
+}
+nbrfolds=10
+#KCrossValidation(design.cv[1:10,],outcome.cv[1:10],runif(nbrfolds, min=0, max=3), nbrfolds)
+tuningparameter=KCrossValidation(design.cv,outcome.cv,runif(100, min=0, max=5), nbrfolds)
+tuningparameter   
+```
+
+3.5 Training the Model with the Selected Tuning Parameter
+```{r}
+estimator=LassoCoordinateDecent(design.train, outcome.train, tuningparameter, nbrcycles=200,
+                                startingpoint=rep(0,dim(design)[2]))
+estimator
+```
+
+3.6 Testing the Model
+```{r}
+error=l2norm(outcome.test-design.test%*%estimator)
+error
+```
+
+4. Evaluation:
+
+4.1 Relavant Coordinates:
+```{r}
+
+```
+
+
+
+
+

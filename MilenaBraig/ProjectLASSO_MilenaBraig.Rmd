@@ -68,19 +68,27 @@ outcome <- design%*%regression.vector+rnorm(n,mean=0,sd=0.01)
 ```
 3. Testing the Lasso-Implementation on Real Data
 
-3.1 Importing and Scaling a Real Data Set
+3.1 Importing a Real Data Set
 ```{r}
+#importing the data
 data.original=read.csv("/Users/milena/HDStatistics_Project/High-DimensionalStatistics2024/MilenaBraig/communities_data.csv", header=FALSE, sep=",")
-data=data.original[,6:128]  #deleting non-predictive features
-n=dim(data)[1]    #saving dimensions
+#deleting non-predictive features
+data=data.original[,6:128]  
+#saving the dimensions of the data
+n=dim(data)[1]   
 p=dim(data)[2]
-data=as.numeric(as.matrix(data, nrow=n,ncol=p))   #converting to numeric values
-data=matrix(data,nrow=n,ncol=p)                   #converting the vector from as.numeric back to a matrix
+#converting to numeric values
+data=as.numeric(as.matrix(data, nrow=n,ncol=p))   
+#converting the vector from as.numeric back to a matrix
+data=matrix(data,nrow=n,ncol=p)
+#omitting samples wit NA values
 data=na.omit(data)
-#scaling
-#data=scale(data/sqrt(dim(data)[1]-1)*sqrt(dim(data)[1]))
-design=data[,-dim(data)[2]]
-outcome=data[,dim(data)[2]]
+#saving the reduced number of samples
+n=dim(data)[1]
+
+#importing the feature names
+data.description<-read.csv("/Users/milena/HDStatistics_Project/High-DimensionalStatistics2024/MilenaBraig/communities_names.csv", header=FALSE, sep=",")
+data.names=as.matrix(data.description[199:321,1])
 ```
 ??? KANN ICH LemasGangUnitDeploy BENUTZEN??? -> ordinal data
 
@@ -186,9 +194,19 @@ error
 
 4. Evaluation:
 
-4.1 Relavant Coordinates:
+4.1 Relevant Coordinates:
 ```{r}
-
+#support of the estimator
+support=NULL
+for(i in 1:length(estimator)){
+  if(estimator[i]!=0){
+    support[length(support)+1]=i
+  }
+}
+length(support)
+features.relevant=data.frame(weight=estimator[support], Features=data.names[support])
+abs.influence=data.frame(weight=abs(estimator[support]), Features=data.names[support])
+abs.influence.ordered=abs.influence[order(abs.influence$weight,decreasing=TRUE),]
 ```
 
 

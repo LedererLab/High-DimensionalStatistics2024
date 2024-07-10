@@ -1,9 +1,11 @@
 ---
 title: "Project_LASSO-Implementation"
-output: html_notebook
+output: 
+  html_notebook:
+    number_sections: true
 ---
-
-1. Implementing the Coordinate Decent
+# Implementing the Coordinate Decent
+## Soft-Thresholding
 ```{r}
 SoftThresholding<-function(z,lambda){
   if (z>lambda){
@@ -14,16 +16,20 @@ SoftThresholding<-function(z,lambda){
   } 
   return(0)
 }
-#Test
-x=-10:10
-y=rep(0,length(x))
-for(i in 1:length(x)){
-  y[i]=SoftThresholding(x[i],3)
-}
-plot(x,y)
 ```
 
 
+```{r}
+#Test
+#x=-10:10
+#y=rep(0,length(x))
+#for(i in 1:length(x)){
+#  y[i]=SoftThresholding(x[i],3)
+#}
+#plot(x,y)
+```
+
+## Coordinate Decent
 ```{r}
 LassoCoordinateDecent<-function(design, outcome, tuningparameter, nbrcycles, startingpoint=NULL){
   #generating a random starting point for the estimator if no starting point is given
@@ -39,13 +45,15 @@ LassoCoordinateDecent<-function(design, outcome, tuningparameter, nbrcycles, sta
   C=matrix(rep(0,dim(design)[2]*(dim(design)[2]-1)),nrow=dim(design)[2],ncol=(dim(design)[2]-1))
   d=rep(NULL,dim(design)[2])
   for (i in 1:dim(design)[2]){
-    a[i]=t(design[,i])%*%design[,i]   #squared l2-norms od the predictors (columns of the design)
+    a[i]=t(design[,i])%*%design[,i]   #squared l2-norms of the predictors (columns of the design)
     b[i]=t(design[,i])%*%outcome      
     C[i,]=t(design[,i])%*%design[,-i]
     d[i]=tuningparameter/a[i]
   }
-  for (k in 1:nbrcycles){
-    index=sample(1:dim(design)[2])
+  #sampling the indexes to gor randomly through the vector
+  index=sample(1:dim(design)[2]) 
+  #actual coordinate decent
+  for (k in 1:nbrcycles){    
     for (i in 1:dim(design)[2]){
       estimator[index[i]]=SoftThresholding((b[index[i]]-C[index[i],]%*%estimator[-index[i]])/a[index[i]],
                                            d[index[i]])
@@ -55,7 +63,7 @@ LassoCoordinateDecent<-function(design, outcome, tuningparameter, nbrcycles, sta
 }
 ```
 
-2. Testing coordinate decent with data from Lab 4
+# Testing coordinate decent with data from Lab 4
 ```{r}
 set.seed(1)
 n <- 100; p <- 500
@@ -63,12 +71,14 @@ design <- matrix(rnorm(n*p,mean=0,sd=1),nrow=100,ncol=500)
 regression.vector <- c(1,1,1,rep(0,p-3))
 outcome <- design%*%regression.vector+rnorm(n,mean=0,sd=0.01) 
 
-#LassoCoordinateDecent(design, outcome, tuningparameter = 0.225, nbrcycles=100,
-#                      startingpoint=rep(0,dim(design)[2]))
+LassoCoordinateDecent(design, outcome, tuningparameter = 0.225, nbrcycles=200,
+                      startingpoint=rep(0,dim(design)[2]))
 ```
-3. Testing the Lasso-Implementation on Real Data
+# Testing the Lasso-Implementation on Real Data
 
-3.1 Importing a Real Data Set
+Socio-economic data from the 1990 US Census, law enforcement data from the 1990 US LEMAS survey, and crime data from the 1995 FBI UCR to predict the total number of violent crimes per 100.000 residents.
+
+## Importing a Real Data Set
 ```{r}
 #importing the data
 data.original=read.csv("/Users/milena/HDStatistics_Project/High-DimensionalStatistics2024/MilenaBraig/communities_data.csv", header=FALSE, sep=",")
@@ -87,13 +97,17 @@ data=na.omit(data)
 n=dim(data)[1]
 
 #importing the feature names
-data.description<-read.csv("/Users/milena/HDStatistics_Project/High-DimensionalStatistics2024/MilenaBraig/communities_names.csv", header=FALSE, sep=",")
-data.names=as.matrix(data.description[199:321,1])
+data.features<-read.csv("/Users/milena/HDStatistics_Project/High-DimensionalStatistics2024/MilenaBraig/communities_names_edited.csv", header=FALSE, sep=";")
+#adding the feature descriptions as column names
+names(data.original)<-data.features[,2]
+#omiting the non-predictive features
+data.features.pred=data.frame(data.features[6:127,])
+
+print(data.features[,2])
 ```
-??? KANN ICH LemasGangUnitDeploy BENUTZEN??? -> ordinal data
 
 
-3.2 Divinding the Data into Data for Cross Validation, Training, and Testing
+## Divinding the Data into Data for Cross Validation, Training, and Testing
 ```{r}
 size.training=100
 size.testing=100
@@ -105,25 +119,29 @@ data.train=data[indexes.training,]
 data.rest=data[-indexes.training,]
 indexes.testing=sample(c(1:dim(data.rest)[1]), size.testing)
 data.test=data.rest[indexes.testing,]
-design.test=data.test[,-dim(data)[2]]
-outcome.test=data.test[,dim(data)[2]]
 #data for cross-validation
 data.rest=data.rest[-indexes.testing,]
 indexes.cv=sample(c(1:dim(data.rest)[1]), size.cv)
 data.cv=data.rest[indexes.cv,]
-design.cv=data.cv[,-dim(data)[2]]
-outcome.cv=data.cv[,dim(data)[2]]
 ```
 
-3.3 Centering and Scaling
+## Centering and Scaling
 ```{r}
+#centering training data
 mean=colMeans(data.train)
-data.train.centered=data.train-mean ###Überprüfen ob r das richtig macht
+for (i in 1:dim(data.train)[2]){
+  data.train.centered[,i]=data.train[,i]-mean[i] 
+}
+#scaling training data
 sd=apply(data.train.centered,MARGIN=2,FUN=sd)
-#scaling
-data.train.scaled=data.train.centered/sd###Überprüfen ob r das richtig macht
-data.test.scaled=(data.test-mean)/sd
-data.cv.scaled=(data.cv-mean)/sd
+for (i in 1:dim(data.train)[2]){
+  data.train.scaled[,i]=data.train.centered[,i]*1/sd[i]
+}
+#centering and scaling test and cross-validation data
+for (i in 1:dim(data.train)[2]){
+  data.test.scaled[,i]=(data.test[,i]-mean[i])/sd[i]
+  data.cv.scaled[,i]=(data.cv[,i]-mean[i])/sd[i]
+}
 #dividing training data
 design.train=data.train.scaled[,-dim(data)[2]]
 outcome.train=data.train.scaled[,dim(data)[2]]
@@ -136,7 +154,7 @@ outcome.cv=data.cv.scaled[,dim(data)[2]]
 ```
 
 
-3.4 K-Fold Cross-Validation
+## K-Fold Cross-Validation
 ```{r}
 l2norm<-function(x){
   return(sqrt(sum(x^2)))
@@ -157,11 +175,11 @@ KCrossValidation <- function(design, outcome, tuning.parameters, nbrfolds){
   for(j in 1:length(tuning.parameters)){ #for each tuning parameter
     error=rep(NULL,nbrfolds)
     for(k in 1:nbrfolds){ #for each data separation
-    #training the model 
-    estimator=LassoCoordinateDecent(design[-Folds[k,],], outcome[-Folds[k,]], tuning.parameters[j],
-                                    nbrcycles=100, startingpoint = rep(0,dim(design)[2]) )
-    #testing the model
-    error[k]=l2norm(outcome[Folds[k,]]-design[Folds[k,],]%*%estimator)
+      #training the model 
+      estimator=LassoCoordinateDecent(design[-Folds[k,],], outcome[-Folds[k,]], tuning.parameters[j],
+                                    nbrcycles=200, startingpoint = rep(0,dim(design)[2]) )
+      #testing the model
+      error[k]=l2norm(outcome[Folds[k,]]-design[Folds[k,],]%*%estimator)
     }
     #average error
     avg.error=(sum(error)/nbrfolds)
@@ -169,32 +187,31 @@ KCrossValidation <- function(design, outcome, tuning.parameters, nbrfolds){
     if (avg.error<min.avg.error){
       min.avg.error=avg.error
       best.tuningparameter=tuning.parameters[j]
-      }
+    }
   }
   return(best.tuningparameter)
 }
 nbrfolds=10
 #KCrossValidation(design.cv[1:10,],outcome.cv[1:10],runif(nbrfolds, min=0, max=3), nbrfolds)
-tuningparameter=KCrossValidation(design.cv,outcome.cv,runif(100, min=0, max=5), nbrfolds)
+tuningparameter=KCrossValidation(design.cv,outcome.cv,runif(100, min=0, max=100), nbrfolds)
 tuningparameter   
 ```
 
-3.5 Training the Model with the Selected Tuning Parameter
+## Training the Model with the Selected Tuning Parameter
 ```{r}
 estimator=LassoCoordinateDecent(design.train, outcome.train, tuningparameter, nbrcycles=200,
-                                startingpoint=rep(0,dim(design)[2]))
+                                startingpoint=rep(0,dim(design.train)[2]))
 estimator
 ```
 
-3.6 Testing the Model
+## Testing the Model
 ```{r}
 error=l2norm(outcome.test-design.test%*%estimator)
 error
 ```
 
-4. Evaluation:
+## Evaluation:
 
-4.1 Relevant Coordinates:
 ```{r}
 #support of the estimator
 support=NULL
@@ -203,13 +220,21 @@ for(i in 1:length(estimator)){
     support[length(support)+1]=i
   }
 }
-length(support)
-features.relevant=data.frame(weight=estimator[support], Features=data.names[support])
-abs.influence=data.frame(weight=abs(estimator[support]), Features=data.names[support])
-abs.influence.ordered=abs.influence[order(abs.influence$weight,decreasing=TRUE),]
 ```
 
 
+```{r}
+cat("The cross validation gives a tuning parameter of ", tuningparameter, ". Training the model with this tuning parameter results in an l2-error testing error of ", error, ". Looking at the estimator, we see that there are only", length(support), "features that are regarded as relevant in our model. Those features are:\n")
 
+print(data.features.pred[support,2])
+```
 
+```{r}
+influence=data.frame(weight=estimator[support], Features=data.features.pred[support,2])
+influence.ordered=influence[order(influence$weight,decreasing=TRUE),]
+```
+## Conclusion
+```{r}
+cat("- The model is comparativly sparse: ", length(support)," of", dim(design.train)[2]," features correspond to non-zero entries in the estimator. \n - There is no distinct focus on a type of in formation given by the features (heritage, income, employment, living situation, police) only the education is not regarded at all (apart from its possible influence on th employment).\n - The features with a negative influence on the number of violent crimes describe primarily model families, employment and income\n - The features with a positive influence on the number of violent crimes describe primarily conflicted living situations (divorce, homelesness, high rent compared to the income) and police presence")
+```
 

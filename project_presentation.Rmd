@@ -1,0 +1,221 @@
+---
+title: "Projekt"
+author: "Mazia Ishaque"
+date: "2024-07-03"
+output:
+  ioslides_presentation: default
+  slidy_presentation: default
+  beamer_presentation: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 60), tidy = TRUE)
+```
+
+## Coordinate Descent (1/2)
+
+- Soft-Thresholding Operator
+```{r test, echo=TRUE, message=TRUE}
+ST <- function(lambda, z)
+{
+  if (z > lambda) {
+    return(z - lambda)
+  }
+  else if (z < -lambda) {
+    return(z + lambda)
+  }
+  else {
+    return(0)
+  }
+}
+```
+
+## Coordinate Descent (2/2)
+
+- Coordinate Descent for LASSO
+```{r echo=TRUE}
+CDLasso <- function(X, y, beta1, lambda, rep)
+{
+  beta = beta1
+  for (j in 1:rep) {
+    for (i in 1:ncol(X)) {
+      norm2 = norm(X[,i], type = "2")^2
+      
+      a =  lambda / norm2
+      
+      b = ( t(X[,i]) %*% (y - X[,-i] %*% beta[-i]) ) / norm2
+      
+      beta[i] = ST(a,b)
+    }
+  }
+  return(beta)
+}
+```
+
+## Datensatz - Bike Sharing
+
+- Lade die Daten (https://archive.ics.uci.edu/dataset/275/bike+sharing+dataset)
+```{r include=FALSE}
+file_path <- #file path zu day.csv
+```
+```{r echo=TRUE}
+data <- read.csv(file_path); head(data)
+```
+
+## Datensatz anpassen
+
+- Ziel: Anzahl der Fahradausleihungen "cnt" zu schätzen (alternativ:casual oder registered) 
+- nutze nicht alle Parameter unter anderem auch weil einige Binär sind oder etwas Klassifizieren
+- umfasst Daten von zwei Jahren, die unter anderem durch die Jahreszeiten getrennt sind
+- Für mich unrelevante Features: \
+instant, dteday, yr, mnth, holiday, weekday
+- Für mich relevante Features: \
+workingday (Binary), weathersit (Categorical), temperature, feeling temperature, humidity, wind speed 
+
+
+## Trainings- und Testset
+- nutze die ersten vier kalendarische Jahreszeiten als Traingingset und die zweiten als Testset
+* Jahr 1: (Trainingsset)
+  + Winter: 1-79
+  + Frühling: 80  - 171
+  + Sommer: 172 - 265
+  + Herbst: 266 - 354
+* Jahr 2: (Testset)
+  + Winter: 355 - 445 (fängt im ersten Jahr an)
+  + Frühling: 446 - 537
+  + Sommer: 538 - 631
+  + Herbst: 632 - 720 (Daten gehen noch bis 731)
+
+## Data Anaylsis (1/4)
+- nutze das ganze Trainigsset und die ersten 10 Daten aus dem Testset
+```{r echo=TRUE, tidy=FALSE}
+columns_of_interest <- c("workingday", "weathersit", "temp",
+                          "atemp", "hum", "windspeed")
+# Winter
+y_train_w <- as.matrix(data[1:79,"cnt"]) 
+y_test_w <- as.matrix(data[355:445,"cnt"])[1:10]
+
+X_train_w <- as.matrix(data[1:79, columns_of_interest])
+X_test_w <- as.matrix(data[355:445, columns_of_interest])[1:10,]
+
+# Frühling
+y_train_f <- as.matrix(data[80:171,"cnt"]) 
+y_test_f <- as.matrix(data[446:537,"cnt"])[1:10]
+
+X_train_f <- as.matrix(data[80:171, columns_of_interest])
+X_test_f <- as.matrix(data[446:537, columns_of_interest])[1:10,]
+```
+
+## Data Anaylsis (2/4)
+```{r echo=TRUE, tidy=FALSE}
+# Sommer
+y_train_s <- as.matrix(data[172:265,"cnt"]) 
+y_test_s <- as.matrix(data[538:631,"cnt"])[1:10]
+
+X_train_s <- as.matrix(data[172:265, columns_of_interest])
+X_test_s <- as.matrix(data[538:631, columns_of_interest])[1:10,]
+
+# Herbst
+y_train_h <- as.matrix(data[266:354,"cnt"]) 
+y_test_h <- as.matrix(data[632:720,"cnt"])[1:10]
+
+X_train_h <- as.matrix(data[266:354, columns_of_interest])
+X_test_h <- as.matrix(data[632:720, columns_of_interest])[1:10,]
+```
+
+
+## Data Anaylsis (3/4)
+- Daten weiter anpassen
+```{r echo=TRUE, tidy = TRUE}
+X_test_w <- cbind(1, X_test_w, X_test_w^2, X_test_w[,"temp"]*X_test_w[,"atemp"])
+X_train_w <- cbind(1, X_train_w, X_train_w^2, X_train_w[,"temp"]*X_train_w[,"atemp"])
+
+X_test_f <- cbind(1, X_test_f, X_test_f^2, X_test_f[,"temp"]*X_test_f[,"atemp"])
+X_train_f <- cbind(1, X_train_f, X_train_f^2, X_train_f[,"temp"]*X_train_f[,"atemp"])
+
+X_test_s <- cbind(1, X_test_s, X_test_s^2, X_test_s[,"temp"]*X_test_s[,"atemp"])
+X_train_s <- cbind(1, X_train_s, X_train_s^2, X_train_s[,"temp"]*X_train_s[,"atemp"])
+
+X_test_h <- cbind(1, X_test_h, X_test_h^2, X_test_h[,"temp"]*X_test_h[,"atemp"])
+X_train_h <- cbind(1, X_train_h, X_train_h^2, X_train_h[,"temp"]*X_train_h[,"atemp"])
+```
+
+
+## Data Anaylsis (4/4)
+- Bestimme beta_hat
+```{r echo=TRUE}
+p = dim(X_train_w)[2]
+
+beta_hat_w = CDLasso(X_train_w, y_train_w, beta1=rep(1, p), lambda=1, rep=200)
+beta_hat_f = CDLasso(X_train_f, y_train_f, beta1=rep(1, p), lambda=1, rep=200)
+beta_hat_s = CDLasso(X_train_s, y_train_s, beta1=rep(1, p), lambda=1, rep=200)
+beta_hat_h = CDLasso(X_train_h, y_train_h, beta1=rep(1, p), lambda=1, rep=200)
+```
+
+```{r eval=FALSE, include=FALSE}
+w_hat = cbind(y_test_w, floor(X_test_w %*% beta_hat_w))
+f_hat = cbind(y_test_f, floor(X_test_f %*% beta_hat_f))
+s_hat = cbind(y_test_s, floor(X_test_s %*% beta_hat_s))
+h_hat = cbind(y_test_h, floor(X_test_h %*% beta_hat_h))
+```
+
+## Ergebnisse
+```{r echo=TRUE}
+l = length(y_test_w)
+
+data.frame(Winter = y_test_w, W_hat = floor(X_test_w %*% beta_hat_w), X = rep("|",l),
+           Frühling = y_test_f, F_hat = floor(X_test_f %*% beta_hat_f), . = rep("|",l),
+           Sommer = y_test_s, S_hat = floor(X_test_s %*% beta_hat_s),  x = rep("|",l),
+           Herbst = y_test_h, H_hat = floor(X_test_h %*% beta_hat_h)
+          )
+```
+
+## Anpassungen
+- Versuche bessere Ergebnisse zu bekommen
+- Vorgehensweise: weniger ist mehr
+```{r echo=TRUE}
+# Winter
+y_train_w <- as.matrix(data[20:30,"cnt"]) 
+X_train_w <- as.matrix(data[20:30, columns_of_interest])
+
+# Frühling
+y_train_f <- as.matrix(data[150:160,"cnt"]) 
+X_train_f <- as.matrix(data[150:160, columns_of_interest])
+
+# Sommer
+y_train_s <- as.matrix(data[230:240,"cnt"]) 
+X_train_s <- as.matrix(data[230:240, columns_of_interest])
+
+# Herbst
+y_train_h <- as.matrix(data[340:350,"cnt"]) 
+X_train_h <- as.matrix(data[340:350, columns_of_interest])
+```
+
+```{r include=FALSE}
+X_train_w <- cbind(1, X_train_w, X_train_w^2, X_train_w[,"temp"]*X_train_w[,"atemp"])
+X_train_f <- cbind(1, X_train_f, X_train_f^2, X_train_f[,"temp"]*X_train_f[,"atemp"])
+X_train_s <- cbind(1, X_train_s, X_train_s^2, X_train_s[,"temp"]*X_train_s[,"atemp"])
+X_train_h <- cbind(1, X_train_h, X_train_h^2, X_train_h[,"temp"]*X_train_h[,"atemp"])
+
+p = dim(X_train_w)[2]
+
+beta_hat_w = CDLasso(X_train_w, y_train_w, beta1=rep(1, p), lambda=1, rep=200)
+beta_hat_f = CDLasso(X_train_f, y_train_f, beta1=rep(1, p), lambda=1, rep=200)
+beta_hat_s = CDLasso(X_train_s, y_train_s, beta1=rep(1, p), lambda=1, rep=200)
+beta_hat_h = CDLasso(X_train_h, y_train_h, beta1=rep(1, p), lambda=1, rep=200)
+```
+
+## Ergebnisse II
+```{r echo=FALSE}
+l = length(y_test_w)
+
+data.frame(Winter = y_test_w, W_hat = floor(X_test_w %*% beta_hat_w), X = rep("|",l),
+           Frühling = y_test_f, F_hat = floor(X_test_f %*% beta_hat_f), . = rep("|",l),
+           Sommer = y_test_s, S_hat = floor(X_test_s %*% beta_hat_s),  x = rep("|",l),
+           Herbst = y_test_h, H_hat = floor(X_test_h %*% beta_hat_h)
+          )
+```
+
+
+
+
